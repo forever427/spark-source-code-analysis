@@ -72,8 +72,11 @@ private[streaming] class ReceivedBlockTracker(
 
   private type ReceivedBlockQueue = mutable.Queue[ReceivedBlockInfo]
 
+  // 封装了 streamId 到 Block队列的映射
   private val streamIdToUnallocatedBlockQueues = new mutable.HashMap[Int, ReceivedBlockQueue]
+  // 封装了 time 到 Blocks 的映射
   private val timeToAllocatedBlocks = new mutable.HashMap[Time, AllocatedBlocks]
+  // 如果开启了预写日至，则会写入日至中
   private val writeAheadLogOption = createWriteAheadLog()
 
   private var lastAllocatedBatchTime: Time = null
@@ -84,11 +87,14 @@ private[streaming] class ReceivedBlockTracker(
   }
 
   /** Add received block. This event will get written to the write ahead log (if enabled). */
+  // 添加接收块。 此事件将写入预写日志（如果启用）
+  // 将 block 信息写入到队列中
   def addBlock(receivedBlockInfo: ReceivedBlockInfo): Boolean = {
     try {
       val writeResult = writeToLog(BlockAdditionEvent(receivedBlockInfo))
       if (writeResult) {
         synchronized {
+          // 将 receivedBlockInfo 加入到 ReceivedBlockQueue 队列中
           getReceivedBlockQueue(receivedBlockInfo.streamId) += receivedBlockInfo
         }
         logDebug(s"Stream ${receivedBlockInfo.streamId} received " +

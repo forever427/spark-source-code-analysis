@@ -202,6 +202,7 @@ private[deploy] class Worker(
     webUi.bind()
 
     workerWebUiUrl = s"http://$publicAddress:${webUi.boundPort}"
+    // 向master注册
     registerWithMaster()
 
     metricsSystem.registerSource(workerSource)
@@ -238,7 +239,9 @@ private[deploy] class Worker(
         override def run(): Unit = {
           try {
             logInfo("Connecting to master " + masterAddress + "...")
+            // 获取master端点信息
             val masterEndpoint = rpcEnv.setupEndpointRef(masterAddress, Master.ENDPOINT_NAME)
+            // 向master发送注册信息
             sendRegisterMessageToMaster(masterEndpoint)
           } catch {
             case ie: InterruptedException => // Cancelled
@@ -348,6 +351,7 @@ private[deploy] class Worker(
     registrationRetryTimer match {
       case None =>
         registered = false
+        // 向master注册
         registerMasterFutures = tryRegisterAllMasters()
         connectionAttemptCount = 0
         registrationRetryTimer = Some(forwordMessageScheduler.scheduleAtFixedRate(
@@ -501,6 +505,7 @@ private[deploy] class Worker(
             dirs
           })
           appDirectories(appId) = appLocalDirs
+          // 创建ExecutorRunner，将executor的信息封装在ExecutorRunner里
           val manager = new ExecutorRunner(
             appId,
             execId,
@@ -519,8 +524,11 @@ private[deploy] class Worker(
             appLocalDirs, ExecutorState.RUNNING)
           executors(appId + "/" + execId) = manager
           manager.start()
+          // 更新使用的cpu信息
           coresUsed += cores_
+          // 更新使用的内存信息
           memoryUsed += memory_
+          // 通知master executor状态改变
           sendToMaster(ExecutorStateChanged(appId, execId, manager.state, None, None))
         } catch {
           case e: Exception =>
@@ -553,6 +561,7 @@ private[deploy] class Worker(
 
     case LaunchDriver(driverId, driverDesc) =>
       logInfo(s"Asked to launch driver $driverId")
+      // 创建DriverRunner
       val driver = new DriverRunner(
         conf,
         driverId,
@@ -562,10 +571,13 @@ private[deploy] class Worker(
         self,
         workerUri,
         securityMgr)
+      // 记录本worker中运行的所有driver
       drivers(driverId) = driver
+      // 启动driver
       driver.start()
-
+      // 记录使用的cpu数量
       coresUsed += driverDesc.cores
+      // 记录使用的内存
       memoryUsed += driverDesc.mem
 
     case KillDriver(driverId) =>
@@ -759,8 +771,11 @@ private[deploy] object Worker extends Logging {
     // The LocalSparkCluster runs multiple local sparkWorkerX RPC Environments
     val systemName = SYSTEM_NAME + workerNumber.map(_.toString).getOrElse("")
     val securityMgr = new SecurityManager(conf)
+    // 创建RpcEnv环境
     val rpcEnv = RpcEnv.create(systemName, host, port, conf, securityMgr)
+    // 获取Master的URL
     val masterAddresses = masterUrls.map(RpcAddress.fromSparkURL(_))
+    // 注册Endpint
     rpcEnv.setupEndpoint(ENDPOINT_NAME, new Worker(rpcEnv, webUiPort, cores, memory,
       masterAddresses, ENDPOINT_NAME, workDir, conf, securityMgr))
     rpcEnv

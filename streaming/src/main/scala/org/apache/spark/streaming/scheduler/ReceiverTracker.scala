@@ -104,6 +104,7 @@ private[streaming] case object GetAllReceiverInfo extends ReceiverTrackerLocalMe
 private[streaming]
 class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false) extends Logging {
 
+  // receiverInputStreams是从DStreamGraph中取出来的
   private val receiverInputStreams = ssc.graph.getReceiverInputStreams()
   private val receiverInputStreamIds = receiverInputStreams.map { _.id }
   private val receivedBlockTracker = new ReceivedBlockTracker(
@@ -149,6 +150,7 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
   private val receiverPreferredLocations = new HashMap[Int, Option[String]]
 
   /** Start the endpoint and receiver execution thread. */
+  // 启动端点和接收器执行线程
   def start(): Unit = synchronized {
     if (isTrackerStarted) {
       throw new SparkException("ReceiverTracker already started")
@@ -157,6 +159,7 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
     if (!receiverInputStreams.isEmpty) {
       endpoint = ssc.env.rpcEnv.setupEndpoint(
         "ReceiverTracker", new ReceiverTrackerEndpoint(ssc.env.rpcEnv))
+      // 启动 Receivers
       if (!skipReceiverLaunch) launchReceivers()
       logInfo("ReceiverTracker started")
       trackerState = Started
@@ -439,6 +442,7 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
   /**
    * Get the receivers from the ReceiverInputDStreams, distributes them to the
    * worker nodes as a parallel collection, and runs them.
+   * 从 ReceiverInputDStreams 中获取Receiver，将它们作为并行集合分发到 worker 节点，并运行它们
    */
   private def launchReceivers(): Unit = {
     val receivers = receiverInputStreams.map { nis =>
@@ -521,11 +525,13 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
         val successful =
           registerReceiver(streamId, typ, host, executorId, receiverEndpoint, context.senderAddress)
         context.reply(successful)
+      // 接收到 AddBlock 事件处理方法
       case AddBlock(receivedBlockInfo) =>
         if (WriteAheadLogUtils.isBatchingEnabled(ssc.conf, isDriver = true)) {
           walBatchingThreadPool.execute(new Runnable {
             override def run(): Unit = Utils.tryLogNonFatalError {
               if (active) {
+                // 调用 addBlock() 方法添加块，并将结果回复
                 context.reply(addBlock(receivedBlockInfo))
               } else {
                 throw new IllegalStateException("ReceiverTracker RpcEndpoint shut down.")
@@ -593,6 +599,7 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
         new SerializableConfiguration(ssc.sparkContext.hadoopConfiguration)
 
       // Function to start the receiver on the worker node
+      // 在 worker 节点上启动 receiver 的函数
       val startReceiverFunc: Iterator[Receiver[_]] => Unit =
         (iterator: Iterator[Receiver[_]]) => {
           if (!iterator.hasNext) {
@@ -602,8 +609,10 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
           if (TaskContext.get().attemptNumber() == 0) {
             val receiver = iterator.next()
             assert(iterator.hasNext == false)
+            // 将每一个 receiver 封装到一个 ReceiverSupervisorImpl 中
             val supervisor = new ReceiverSupervisorImpl(
               receiver, SparkEnv.get, serializableHadoopConf.value, checkpointDirOption)
+            // 调用 ReceiverSupervisorImpl start（） 方法
             supervisor.start()
             supervisor.awaitTermination()
           } else {

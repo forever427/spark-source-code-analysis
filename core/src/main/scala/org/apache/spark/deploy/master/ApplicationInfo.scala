@@ -35,9 +35,13 @@ private[spark] class ApplicationInfo(
     defaultCores: Int)
   extends Serializable {
 
+  // 应用程序的状态
   @transient var state: ApplicationState.Value = _
+  // 分配的所有的executor
   @transient var executors: mutable.HashMap[Int, ExecutorDesc] = _
+  // 移除的executor
   @transient var removedExecutors: ArrayBuffer[ExecutorDesc] = _
+  // 已分配的cpu核数
   @transient var coresGranted: Int = _
   @transient var endTime: Long = _
   @transient var appSource: ApplicationSource = _
@@ -79,6 +83,7 @@ private[spark] class ApplicationInfo(
     }
   }
 
+  // 添加executor
   private[master] def addExecutor(
       worker: WorkerInfo,
       cores: Int,
@@ -89,6 +94,7 @@ private[spark] class ApplicationInfo(
     exec
   }
 
+  // 移除executor
   private[master] def removeExecutor(exec: ExecutorDesc) {
     if (executors.contains(exec.id)) {
       removedExecutors += executors(exec.id)
@@ -97,8 +103,9 @@ private[spark] class ApplicationInfo(
     }
   }
 
+  // 申请的cpu的核数
   private val requestedCores = desc.maxCores.getOrElse(defaultCores)
-
+  // 还未分配的cpu的核数
   private[master] def coresLeft: Int = requestedCores - coresGranted
 
   private var _retryCount = 0

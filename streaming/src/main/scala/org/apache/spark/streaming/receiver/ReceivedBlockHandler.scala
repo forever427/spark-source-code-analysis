@@ -146,6 +146,7 @@ private[streaming] class WriteAheadLogBasedBlockHandler(
         s"write ahead log is enabled, change to replication 1")
     }
 
+    // 默认的持久化策略是带序列化的，默认为1个副本
     StorageLevel(storageLevel.useDisk, storageLevel.useMemory, storageLevel.useOffHeap, false, 1)
   }
 
@@ -172,6 +173,7 @@ private[streaming] class WriteAheadLogBasedBlockHandler(
 
     var numRecords = Option.empty[Long]
     // Serialize the block so that it can be inserted into both
+    // 序列化块
     val serializedBlock = block match {
       case ArrayBufferBlock(arrayBuffer) =>
         numRecords = Some(arrayBuffer.size.toLong)
@@ -188,6 +190,8 @@ private[streaming] class WriteAheadLogBasedBlockHandler(
     }
 
     // Store the block in block manager
+    // 将 block 存储在 block manager 中
+    // 默认的持久化策略是带有序列化的
     val storeInBlockManagerFuture = Future {
       val putSucceeded = blockManager.putBytes(
         blockId,
@@ -201,6 +205,7 @@ private[streaming] class WriteAheadLogBasedBlockHandler(
     }
 
     // Store the block in write ahead log
+    // 将 block 存储在预写日志中
     val storeInWriteAheadLogFuture = Future {
       writeAheadLog.write(serializedBlock.toByteBuffer, clock.getTimeMillis())
     }

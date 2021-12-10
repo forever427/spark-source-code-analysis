@@ -104,12 +104,14 @@ private[spark] class StandaloneSchedulerBackend(
     val coresPerExecutor = conf.getOption("spark.executor.cores").map(_.toInt)
     // If we're using dynamic allocation, set our initial executor limit to 0 for now.
     // ExecutorAllocationManager will send the real initial limit to the Master later.
-    val initialExecutorLimit =
+    val initialExecutorLimit = {
       if (Utils.isDynamicAllocationEnabled(conf)) {
         Some(0)
       } else {
         None
       }
+    }
+    // spark 程序的各种信息的封装
     val appDesc = ApplicationDescription(sc.appName, maxCores, sc.executorMemory, command,
       webUrl, sc.eventLogDir, sc.eventLogCodec, coresPerExecutor, initialExecutorLimit)
     client = new StandaloneAppClient(sc.env.rpcEnv, masters, appDesc, this, conf)

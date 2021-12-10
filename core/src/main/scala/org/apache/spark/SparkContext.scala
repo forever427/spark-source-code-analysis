@@ -195,17 +195,17 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _conf: SparkConf = _
   private var _eventLogDir: Option[URI] = None
   private var _eventLogCodec: Option[String] = None
-  private var _env: SparkEnv = _
+  private var _env: SparkEnv = _ // 以单例形式存储，保存了在运行过程中的各种管理器
   private var _jobProgressListener: JobProgressListener = _
   private var _statusTracker: SparkStatusTracker = _
   private var _progressBar: Option[ConsoleProgressBar] = None
-  private var _ui: Option[SparkUI] = None
+  private var _ui: Option[SparkUI] = None // 提供了每个应用程序的可视化监控界面
   private var _hadoopConfiguration: Configuration = _
   private var _executorMemory: Int = _
-  private var _schedulerBackend: SchedulerBackend = _
-  private var _taskScheduler: TaskScheduler = _
+  private var _schedulerBackend: SchedulerBackend = _ // 负责与集群进行交互，根据应用程序的配置申请资源，启动Executor
+  private var _taskScheduler: TaskScheduler = _ // 负责将DAGScheduler提交上来的task依次提交给SchedulerBackend
   private var _heartbeatReceiver: RpcEndpointRef = _
-  @volatile private var _dagScheduler: DAGScheduler = _
+  @volatile private var _dagScheduler: DAGScheduler = _ // 负责将job划分为多个stage，每个stage中包含多个task
   private var _applicationId: String = _
   private var _applicationAttemptId: Option[String] = None
   private var _eventLogger: Option[EventLoggingListener] = None
@@ -247,6 +247,7 @@ class SparkContext(config: SparkConf) extends Logging {
   def isStopped: Boolean = stopped.get()
 
   // An asynchronous listener bus for Spark events
+  // 消息总线，为了解耦， 专门使用一个变量用来存储运行过程中的消息通知等
   private[spark] val listenerBus = new LiveListenerBus(this)
 
   // This function allows components created by SparkEnv to be mocked in unit tests:
@@ -506,6 +507,7 @@ class SparkContext(config: SparkConf) extends Logging {
 
     // start TaskScheduler after taskScheduler sets DAGScheduler reference in DAGScheduler's
     // constructor
+    // 启动taskScheduler
     _taskScheduler.start()
 
     _applicationId = _taskScheduler.applicationId()
@@ -2058,6 +2060,7 @@ class SparkContext(config: SparkConf) extends Logging {
       rdd: RDD[T],
       func: Iterator[T] => U,
       partitions: Seq[Int]): Array[U] = {
+    // 清除了闭包，保证该操作能进行序列化
     val cleanedFunc = clean(func)
     runJob(rdd, (ctx: TaskContext, it: Iterator[T]) => cleanedFunc(it), partitions)
   }
@@ -2727,6 +2730,7 @@ object SparkContext extends Logging {
         scheduler.initialize(backend)
         (backend, scheduler)
 
+        // Spark常用的Standalone提交方式
       case SPARK_REGEX(sparkUrl) =>
         val scheduler = new TaskSchedulerImpl(sc)
         val masterUrls = sparkUrl.split(",").map("spark://" + _)

@@ -81,8 +81,10 @@ private[spark] class StandaloneAppClient(
     private val registrationRetryThread =
       ThreadUtils.newDaemonSingleThreadScheduledExecutor("appclient-registration-retry-thread")
 
+    // 自动回调
     override def onStart(): Unit = {
       try {
+        // 将Application向Master注册
         registerWithMaster(1)
       } catch {
         case e: Exception =>

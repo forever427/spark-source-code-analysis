@@ -125,19 +125,24 @@ private[spark] class TaskSetManager(
   // of failures.
   // Duplicates are handled in dequeueTaskFromList, which ensures that a
   // task hasn't already started running before launching it.
+  // 每个Executor的所有的待执行的任务，这个集合其实是个栈结构，每来新的Task就添加到集合的尾部
   private val pendingTasksForExecutor = new HashMap[String, ArrayBuffer[Int]]
 
   // Set of pending tasks for each host. Similar to pendingTasksForExecutor,
   // but at host level.
+  // 每个Host的所有的待执行的任务
   private val pendingTasksForHost = new HashMap[String, ArrayBuffer[Int]]
 
   // Set of pending tasks for each rack -- similar to the above.
+  // 每个机架中待执行的任务
   private val pendingTasksForRack = new HashMap[String, ArrayBuffer[Int]]
 
   // Set containing pending tasks with no locality preferences.
+  // 没有最佳位置
   private[scheduler] var pendingTasksWithNoPrefs = new ArrayBuffer[Int]
 
   // Set containing all pending tasks (also used as a stack, as above).
+  // 所有的Task
   private val allPendingTasks = new ArrayBuffer[Int]
 
   // Tasks that can be speculated. Since these will be a small fraction of total
@@ -170,6 +175,7 @@ private[spark] class TaskSetManager(
 
   // Add all our tasks to the pending lists. We do this in reverse order
   // of task index so that tasks with low indices get launched first.
+  // 添加所有的待执行的Task
   for (i <- (0 until numTasks).reverse) {
     addPendingTask(i)
   }
@@ -198,35 +204,46 @@ private[spark] class TaskSetManager(
   private[scheduler] var emittedTaskSizeWarning = false
 
   /** Add a task to all the pending-task lists that it should be on. */
+  // 添加待执行的Task到列表中
   private def addPendingTask(index: Int) {
+    // 这里的首选位置是DAG里计算出来的位置
     for (loc <- tasks(index).preferredLocations) {
       loc match {
         case e: ExecutorCacheTaskLocation =>
+          // 如果Task的首选位置是ExecutorCacheTaskLocation，则把Task放到这个executor的运行队列中
           pendingTasksForExecutor.getOrElseUpdate(e.executorId, new ArrayBuffer) += index
         case e: HDFSCacheTaskLocation =>
+          // 如果缓存在HDFS中，那么每个Task对应的位置是一个Host，则获取这个Host的所有的executor
           val exe = sched.getExecutorsAliveOnHost(loc.host)
           exe match {
             case Some(set) =>
+              // 如果这个Host中有executor，把这个task加入到这个节点的所有的executor中
               for (e <- set) {
                 pendingTasksForExecutor.getOrElseUpdate(e, new ArrayBuffer) += index
               }
               logInfo(s"Pending task $index has a cached location at ${e.host} " +
                 ", where there are executors " + set.mkString(","))
+              // 如果数据被被存在节点中，但是没有executor，则无能为力
             case None => logDebug(s"Pending task $index has a cached location at ${e.host} " +
                 ", but there are no executors alive there.")
           }
+          // 其他的类型不处理
         case _ =>
       }
+      // 把待执行的Task加入到Host对应的集合中，这里的在executor中添加过的Task,再在Host中添加以便
       pendingTasksForHost.getOrElseUpdate(loc.host, new ArrayBuffer) += index
+      // 获取到这个Host对应的机架
       for (rack <- sched.getRackForHost(loc.host)) {
+        // 对应机架运行的Task+1
         pendingTasksForRack.getOrElseUpdate(rack, new ArrayBuffer) += index
       }
     }
-
+    // 如果Task运行的首选位置为空
     if (tasks(index).preferredLocations == Nil) {
+      // 没有制定首选位置的Task
       pendingTasksWithNoPrefs += index
     }
-
+    // 记录所有待执行的Task
     allPendingTasks += index  // No point scanning this whole list to find the old task there
   }
 

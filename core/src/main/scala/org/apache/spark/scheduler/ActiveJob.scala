@@ -51,12 +51,16 @@ private[spark] class ActiveJob(
    * Number of partitions we need to compute for this job. Note that result stages may not need
    * to compute all partitions in their target RDD, for actions like first() and lookup().
    */
+    // Job需要计算的分区数
+    // 如果为ResultStage，即为该Stage的分区的数量
+    // 如果为ShuffleStage，则为Shuffle Map阶段的RDD分区的数量
   val numPartitions = finalStage match {
     case r: ResultStage => r.partitions.length
     case m: ShuffleMapStage => m.rdd.partitions.length
   }
 
   /** Which partitions of the stage have finished */
+    // 记录每个分区数据完成的情况
   val finished = Array.fill[Boolean](numPartitions)(false)
 
   var numFinished = 0

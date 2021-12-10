@@ -42,6 +42,8 @@ private[scheduler] case class ErrorReported(msg: String, e: Throwable) extends J
 /**
  * This class schedules jobs to be run on Spark. It uses the JobGenerator to generate
  * the jobs and runs them using a thread pool.
+ *
+ * 此类安排要在 Spark 上运行的作业。 它使用 JobGenerator 生成作业并使用线程池运行它们。
  */
 private[streaming]
 class JobScheduler(val ssc: StreamingContext) extends Logging {
@@ -52,6 +54,7 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
   private val numConcurrentJobs = ssc.conf.getInt("spark.streaming.concurrentJobs", 1)
   private val jobExecutor =
     ThreadUtils.newDaemonFixedThreadPool(numConcurrentJobs, "streaming-job-executor")
+  // 创建 JobGenerator
   private val jobGenerator = new JobGenerator(this)
   val clock = jobGenerator.clock
   val listenerBus = new StreamingListenerBus(ssc.sparkContext.listenerBus)
@@ -78,12 +81,14 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
     eventLoop.start()
 
     // attach rate controllers of input streams to receive batch completion updates
+    // 附加输入流的速率控制器以接收批量完成更新
     for {
       inputDStream <- ssc.graph.getInputStreams
       rateController <- inputDStream.rateController
     } ssc.addStreamingListener(rateController)
 
     listenerBus.start()
+    // 创建 ReceiverTracker
     receiverTracker = new ReceiverTracker(ssc)
     inputInfoTracker = new InputInfoTracker(ssc)
 
@@ -99,7 +104,9 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
       ssc.graph.batchDuration.milliseconds,
       clock)
     executorAllocationManager.foreach(ssc.addStreamingListener)
+    // 启动 ReceiverTracker
     receiverTracker.start()
+    // 启动 JobGenerator
     jobGenerator.start()
     executorAllocationManager.foreach(_.start())
     logInfo("Started JobScheduler")
@@ -150,6 +157,7 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
     } else {
       listenerBus.post(StreamingListenerBatchSubmitted(jobSet.toBatchInfo))
       jobSets.put(jobSet.time, jobSet)
+      // 【下面这行是最主要的处理逻辑：将每个 job 都在 jobExecutor 线程池中、用 new JobHandler 来处理】
       jobSet.jobs.foreach(job => jobExecutor.execute(new JobHandler(job)))
       logInfo("Added jobs for time " + jobSet.time)
     }
@@ -249,15 +257,18 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
         // it's possible that when `post` is called, `eventLoop` happens to null.
         var _eventLoop = eventLoop
         if (_eventLoop != null) {
+          // 【发布 JobStarted 消息】
           _eventLoop.post(JobStarted(job, clock.getTimeMillis()))
           // Disable checks for existing output directories in jobs launched by the streaming
           // scheduler, since we may need to write output to an existing directory during checkpoint
           // recovery; see SPARK-4835 for more details.
           SparkHadoopWriterUtils.disableOutputSpecValidation.withValue(true) {
+            // 【主要逻辑，直接调用了 job.run()】
             job.run()
           }
           _eventLoop = eventLoop
           if (_eventLoop != null) {
+            // 【发布 JobCompleted 消息】
             _eventLoop.post(JobCompleted(job, clock.getTimeMillis()))
           }
         } else {

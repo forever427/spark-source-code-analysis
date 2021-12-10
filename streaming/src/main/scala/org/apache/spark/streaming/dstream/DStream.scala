@@ -57,9 +57,24 @@ import org.apache.spark.util.{CallSite, Utils}
  *  - A list of other DStreams that the DStream depends on
  *  - A time interval at which the DStream generates an RDD
  *  - A function that is used to generate an RDD after each time interval
+ *
+ *  离散化流 (DStream) 是 Spark Streaming 中的基本抽象，
+ *  是表示连续数据流的连续 RDD（相同类型）序列（有关更多信息，请参阅 Spark 核心文档中的 org.apache.spark.rdd.RDD RDD 的详细信息）。
+ *  DStreams既可以从实时数据创建的（如，从TCP sockets, Kafka, Flume等的数据）使用StreamingContext可以通过将使用诸如map，
+ *  window和reduceByKeyAndWindow操作现有DStreams产生或它。
+ *  当 Spark Streaming 程序运行时，每个 DStream 都会定期生成一个 RDD，要么来自实时数据，要么通过转换由父 DStream 生成的 RDD。
+ *
+ *  此类包含所有 DStream 上可用的基本操作，例如map 、 filter和window 。
+ *  此外， PairDStreamFuanctions包含仅在键值对的 DStream 上可用的操作，例如groupByKeyAndWindow和join 。
+ *  这些操作在任何 DStream 对（例如，DStream[(Int, Int)] 通过隐式转换自动可用。
+ *
+ *  DStream 内部具有一些基本属性：
+ *  1. DStream 依赖的其他 DStream 的列表
+ *  2. DStream 生成 RDD 的时间间隔
+ *  3. 用于在每个时间间隔后生成 RDD 的函数
  */
 
-abstract class DStream[T: ClassTag] (
+abstract  class DStream[T: ClassTag] (
     @transient private[streaming] var ssc: StreamingContext
   ) extends Serializable with Logging {
 
@@ -73,9 +88,11 @@ abstract class DStream[T: ClassTag] (
   def slideDuration: Duration
 
   /** List of parent DStreams on which this DStream depends on */
+  // 此 DStream 所依赖的父 DStream 列表
   def dependencies: List[DStream[_]]
 
   /** Method that generates an RDD for the given time */
+  // 为给定时间生成 RDD 的方法
   def compute(validTime: Time): Option[RDD[T]]
 
   // =======================================================================
@@ -83,6 +100,9 @@ abstract class DStream[T: ClassTag] (
   // =======================================================================
 
   // RDDs generated, marked as private[streaming] so that testsuites can access it
+  // 用一个 HashMap 来保存获取到的 RDDs
+  // 其中 key 是一个时间类型
+  // 其中 value 就是具体的 RDD 实例
   @transient
   private[streaming] var generatedRDDs = new HashMap[Time, RDD[T]]()
 
@@ -324,15 +344,18 @@ abstract class DStream[T: ClassTag] (
   /**
    * Get the RDD corresponding to the given time; either retrieve it from cache
    * or compute-and-cache it.
+   * 获取给定时间对应的RDD； 从缓存中检索它或计算并缓存它。
    */
   private[streaming] final def getOrCompute(time: Time): Option[RDD[T]] = {
     // If RDD was already generated, then retrieve it from HashMap,
     // or else compute the RDD
+    // 从 generatedRDDs 里 get 一下：如果有 rdd 就返回，没有 rdd 就进行 orElse 下面的 rdd 生成步骤
     generatedRDDs.get(time).orElse {
       // Compute the RDD if time is valid (e.g. correct time in a sliding window)
       // of RDD generation, else generate nothing.
+      // 验证 time 需要是 valid
       if (isTimeValid(time)) {
-
+        // 然后调用 compute(time) 方法获得 rdd 实例，并存入 rddOption 变量
         val rddOption = createRDDWithLocalProperties(time, displayInnerRDDOps = false) {
           // Disable checks for existing output directories in jobs launched by the streaming
           // scheduler, since we may need to write output to an existing directory during checkpoint
@@ -353,8 +376,10 @@ abstract class DStream[T: ClassTag] (
             newRDD.checkpoint()
             logInfo(s"Marking RDD ${newRDD.id} for time $time for checkpointing")
           }
+          // 将刚刚实例化出来的 rddOption 放入 generatedRDDs 对应的 time 位置
           generatedRDDs.put(time, newRDD)
         }
+        // 返回刚刚实例化出来的 rddOption
         rddOption
       } else {
         None

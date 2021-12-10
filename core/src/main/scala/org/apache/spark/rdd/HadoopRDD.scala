@@ -47,6 +47,7 @@ import org.apache.spark.util.{NextIterator, SerializableConfiguration, ShutdownH
 private[spark] class HadoopPartition(rddId: Int, override val index: Int, s: InputSplit)
   extends Partition {
 
+  // 每个分区对应生成一个Inputplit
   val inputSplit = new SerializableWritable[InputSplit](s)
 
   override def hashCode(): Int = 31 * (31 + rddId) + index
@@ -200,8 +201,10 @@ class HadoopRDD[K, V](
   }
 
   override def compute(theSplit: Partition, context: TaskContext): InterruptibleIterator[(K, V)] = {
+    // 创建迭代器
     val iter = new NextIterator[(K, V)] {
 
+      // 转换为HadoopPartition
       private val split = theSplit.asInstanceOf[HadoopPartition]
       logInfo("Input split: " + split.inputSplit)
       private val jobConf = getJobConf()

@@ -100,19 +100,30 @@ private[streaming] class BlockGenerator(
   }
   import GeneratorState._
 
+  // blockInterval默认值，200毫秒
   private val blockIntervalMs = conf.getTimeAsMs("spark.streaming.blockInterval", "200ms")
   require(blockIntervalMs > 0, s"'spark.streaming.blockInterval' should be a positive value")
 
+  // 每隔200ms，就会调用 updateCurrentBuffer（）
   private val blockIntervalTimer =
     new RecurringTimer(clock, blockIntervalMs, updateCurrentBuffer, "BlockGenerator")
+  // blocksForPushing 默认大小，10
   private val blockQueueSize = conf.getInt("spark.streaming.blockQueueSize", 10)
+  // 基于数组实现的队列
   private val blocksForPushing = new ArrayBlockingQueue[Block](blockQueueSize)
+  // 后台线程，启动之后，就会调用 keepPushingBlocks() 方法
+  // 这个方法会每隔一段时间到 blocksForPushing 取出block
   private val blockPushingThread = new Thread() { override def run() { keepPushingBlocks() } }
 
+  // 用于存放原始的数据
   @volatile private var currentBuffer = new ArrayBuffer[Any]
   @volatile private var state = Initialized
 
   /** Start block generating and pushing threads. */
+  // 开始块生成和推送线程
+  // 启动两个后台关键线程
+  // 1. blockIntervalTimer：负责将 currentBuffer 中的原始数据打包成一个一个的bolck
+  // 2. blockPushingThread：负责将 blocksForPushing 中的 block 发送
   def start(): Unit = synchronized {
     if (state == Initialized) {
       state = Active
@@ -232,18 +243,23 @@ private[streaming] class BlockGenerator(
   /** Change the buffer to which single records are added to. */
   private def updateCurrentBuffer(time: Long): Unit = {
     try {
+      // 清空 currentBuffer
+      // 创建一个新的 currentBuffer
       var newBlock: Block = null
       synchronized {
         if (currentBuffer.nonEmpty) {
           val newBlockBuffer = currentBuffer
           currentBuffer = new ArrayBuffer[Any]
+          // 根据时间创建一个blockId， 唯一的
           val blockId = StreamBlockId(receiverId, time - blockIntervalMs)
           listener.onGenerateBlock(blockId)
+          // 封装为一个block
           newBlock = new Block(blockId, newBlockBuffer)
         }
       }
 
       if (newBlock != null) {
+        // 将 block 推入 blocksForPushing
         blocksForPushing.put(newBlock)  // put is blocking when queue is full
       }
     } catch {
@@ -264,8 +280,11 @@ private[streaming] class BlockGenerator(
 
     try {
       // While blocks are being generated, keep polling for to-be-pushed blocks and push them.
+      // 在生成块时，继续轮询要推送的块并推送它们
       while (areBlocksBeingGenerated) {
+        // 对于阻塞队列，默认设置了10ms的超时时间
         Option(blocksForPushing.poll(10, TimeUnit.MILLISECONDS)) match {
+          // 推送block
           case Some(block) => pushBlock(block)
           case None =>
         }

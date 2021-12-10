@@ -30,6 +30,11 @@ import org.apache.spark.streaming.scheduler.Job
  * @param displayInnerRDDOps Whether the detailed callsites and scopes of the RDDs generated
  *                           by `foreachFunc` will be displayed in the UI; only the scope and
  *                           callsite of `DStream.foreachRDD` will be displayed.
+ * 用于表示输出操作的内部 DStream，如 DStream.foreachRDD。
+ * 参数：
+ * parent – 父 DStream
+ * oreachFunc – 应用于父 DStream 生成的每个 RDD 的函数
+ * displayInnerRDDOps – foreachFunc 生成的RDD的详细callsite 和scope 是否会显示在UI 中； 只会显示DStream.foreachRDD的作用域和调用点
  */
 private[streaming]
 class ForEachDStream[T: ClassTag] (
@@ -44,12 +49,20 @@ class ForEachDStream[T: ClassTag] (
 
   override def compute(validTime: Time): Option[RDD[Unit]] = None
 
+  /**
+   * 所有的output操作都会调用ForEachDStream的generateJob（）方法
+   * 所有说，每次执行DstreamGraph的时候，到了最后，都会调用到这里
+   * 然后触发Job的提交
+   **/
   override def generateJob(time: Time): Option[Job] = {
+    // 【首先调用 parentDStream 的 getOrCompute() 来获取 parentRDD】
     parent.getOrCompute(time) match {
       case Some(rdd) =>
+        // 【然后定义 jobFunc 为在 parentRDD 上执行 foreachFun() 】
         val jobFunc = () => createRDDWithLocalProperties(time, displayInnerRDDOps) {
           foreachFunc(rdd, time)
         }
+        // 【最后将 jobFunc 包装为 Job 返回】
         Some(new Job(time, jobFunc))
       case None => None
     }

@@ -42,6 +42,7 @@ private[spark] class LiveListenerBus(val sparkContext: SparkContext) extends Spa
   // Cap the capacity of the event queue so we get an explicit error (rather than
   // an OOM exception) if it's perpetually being added to more quickly than it's being drained.
   private lazy val EVENT_QUEUE_CAPACITY = validateAndGetQueueSize()
+  // 定义一个消息队列
   private lazy val eventQueue = new LinkedBlockingQueue[SparkListenerEvent](EVENT_QUEUE_CAPACITY)
 
   private def validateAndGetQueueSize(): Int = {

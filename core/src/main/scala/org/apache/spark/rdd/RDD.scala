@@ -46,6 +46,11 @@ import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, Poi
   SamplingUtils}
 
 /**
+ * RDD（弹性分布式数据集）是Spark中最基本的核心抽象。
+ * 他是一个不可变,可分区,里边的元素可以并行执行的集合
+ **/
+
+/**
  * A Resilient Distributed Dataset (RDD), the basic abstraction in Spark. Represents an immutable,
  * partitioned collection of elements that can be operated on in parallel. This class contains the
  * basic operations available on all RDDs, such as `map`, `filter`, and `persist`. In addition,
@@ -73,6 +78,16 @@ import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, Poi
  * <a href="http://people.csail.mit.edu/matei/papers/2012/nsdi_spark.pdf">Spark paper</a>
  * for more details on RDD internals.
  */
+
+/**
+ * 一组分区
+ * 每一个本区都有一个计算函数
+ * 一个依赖其他RDD的列表
+ * 可选的,对于key alue类型的RDD 有分区器
+ * 可选的,一个计算每个分片位置感知的列表
+ **/
+
+// RDD 本身是一个抽象类
 abstract class RDD[T: ClassTag](
     @transient private var _sc: SparkContext,
     @transient private var deps: Seq[Dependency[_]]
@@ -223,6 +238,7 @@ abstract class RDD[T: ClassTag](
 
   // Our dependencies and partitions will be gotten by calling subclass's methods below, and will
   // be overwritten when we're checkpointed
+  // 我们的依赖和分区将通过调用下面的子类的方法获得，并在我们检查点时被覆盖
   private var dependencies_ : Seq[Dependency[_]] = null
   @transient private var partitions_ : Array[Partition] = null
 

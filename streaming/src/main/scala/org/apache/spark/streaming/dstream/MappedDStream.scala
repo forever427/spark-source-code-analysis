@@ -33,6 +33,8 @@ class MappedDStream[T: ClassTag, U: ClassTag] (
   override def slideDuration: Duration = parent.slideDuration
 
   override def compute(validTime: Time): Option[RDD[U]] = {
+    // 1. 获取 parent DStream 在本 batch 里对应的 RDD 实例
+    // 2. 在这个 parent RDD 实例上，以 mapFunc 为参数调用 .map(mapFunc) 方法，将得到的新 RDD 实例返回
     parent.getOrCompute(validTime).map(_.map[U](mapFunc))
   }
 }

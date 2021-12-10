@@ -498,6 +498,7 @@ object SparkSubmit extends CommandLineUtils {
     // In addition, add the main application jar and any added jars (if any) to the classpath
     // Also add the main application jar and any added jars to classpath in case YARN client
     // requires these jars.
+    // 如果为客户端模式，运行的主类就是客户指定的类
     if (deployMode == CLIENT || isYarnCluster) {
       childMainClass = args.mainClass
       if (isUserJar(args.primaryResource)) {
@@ -533,12 +534,14 @@ object SparkSubmit extends CommandLineUtils {
 
     // In standalone cluster mode, use the REST client to submit the application (Spark 1.3+).
     // All Spark parameters are expected to be passed to the client through system properties.
+    // Standalone下的cluster模式
     if (args.isStandaloneCluster) {
       if (args.useRest) {
         childMainClass = "org.apache.spark.deploy.rest.RestSubmissionClient"
         childArgs += (args.primaryResource, args.mainClass)
       } else {
         // In legacy standalone cluster mode, use Client as a wrapper around the user class
+        // Standalone下的cluster模式使用 org.apache.spark.deploy.Client类包装用户的程序
         childMainClass = "org.apache.spark.deploy.Client"
         if (args.supervise) { childArgs += "--supervise" }
         Option(args.driverMemory).foreach { m => childArgs += ("--memory", m) }

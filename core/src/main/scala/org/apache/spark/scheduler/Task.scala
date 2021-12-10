@@ -82,7 +82,7 @@ private[spark] abstract class Task[T](
       partitionId,
       taskAttemptId,
       attemptNumber,
-      taskMemoryManager,
+      taskMemoryManager, // 内存管理器
       localProperties,
       metricsSystem,
       metrics)
@@ -145,15 +145,16 @@ private[spark] abstract class Task[T](
       }
     }
   }
-
+  // 内存管理器
   private var taskMemoryManager: TaskMemoryManager = _
 
   def setTaskMemoryManager(taskMemoryManager: TaskMemoryManager): Unit = {
     this.taskMemoryManager = taskMemoryManager
   }
 
+  // 抽象方法，自类实现
   def runTask(context: TaskContext): T
-
+  // 每个Task都有自己的首选位置
   def preferredLocations: Seq[TaskLocation] = Nil
 
   // Map output tracker epoch. Will be set by TaskSetManager.

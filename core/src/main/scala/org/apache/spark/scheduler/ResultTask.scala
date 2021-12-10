@@ -65,10 +65,12 @@ private[spark] class ResultTask[T, U](
     jobId, appId, appAttemptId)
   with Serializable {
 
+  // 运行首选位置
   @transient private[this] val preferredLocs: Seq[TaskLocation] = {
     if (locs == null) Nil else locs.toSet.toSeq
   }
 
+  // runTask返回的运行结果是用户定义的类型
   override def runTask(context: TaskContext): U = {
     // Deserialize the RDD and the func using the broadcast variables.
     val threadMXBean = ManagementFactory.getThreadMXBean
@@ -76,7 +78,9 @@ private[spark] class ResultTask[T, U](
     val deserializeStartCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
       threadMXBean.getCurrentThreadCpuTime
     } else 0L
+    // 获取序列化工具
     val ser = SparkEnv.get.closureSerializer.newInstance()
+    // 反序列化出需要的RDD和需要执行的function
     val (rdd, func) = ser.deserialize[(RDD[T], (TaskContext, Iterator[T]) => U)](
       ByteBuffer.wrap(taskBinary.value), Thread.currentThread.getContextClassLoader)
     _executorDeserializeTime = System.currentTimeMillis() - deserializeStartTime
@@ -84,6 +88,7 @@ private[spark] class ResultTask[T, U](
       threadMXBean.getCurrentThreadCpuTime - deserializeStartCpuTime
     } else 0L
 
+    // 为当前RDD的该分区数据迭代执行func操作
     func(context, rdd.iterator(partition, context))
   }
 

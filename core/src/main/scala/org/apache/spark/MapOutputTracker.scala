@@ -367,6 +367,7 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf,
   private[spark] def getNumCachedSerializedBroadcast = cachedSerializedBroadcast.size
 
   def registerShuffle(shuffleId: Int, numMaps: Int) {
+    // 使用一个数组，保存每个shuffle的结果
     if (mapStatuses.put(shuffleId, new Array[MapStatus](numMaps)).isDefined) {
       throw new IllegalArgumentException("Shuffle ID " + shuffleId + " registered twice")
     }

@@ -42,7 +42,7 @@ private[spark] class ShuffleMapStage(
     parents: List[Stage],
     firstJobId: Int,
     callSite: CallSite,
-    val shuffleDep: ShuffleDependency[_, _, _])
+    val shuffleDep: ShuffleDependency[_, _, _]) // 划分该Stage的宽依赖
   extends Stage(id, rdd, numTasks, parents, firstJobId, callSite) {
 
   private[this] var _mapStageJobs: List[ActiveJob] = Nil
@@ -58,6 +58,7 @@ private[spark] class ShuffleMapStage(
    * tasks in the TaskSetManager for the active attempt for the stage (the partitions stored here
    * will always be a subset of the partitions that the TaskSetManager thinks are pending).
    */
+    // 还未计算的分区
   val pendingPartitions = new HashSet[Int]
 
   /**
@@ -65,6 +66,7 @@ private[spark] class ShuffleMapStage(
    * and each value in the array is the list of possible [[MapStatus]] for a partition
    * (a single task might run multiple times).
    */
+   // 这个Stage每个分区的结果输出
   private[this] val outputLocs = Array.fill[List[MapStatus]](numPartitions)(Nil)
 
   override def toString: String = "ShuffleMapStage " + id
@@ -96,9 +98,11 @@ private[spark] class ShuffleMapStage(
    * Returns true if the map stage is ready, i.e. all partitions have shuffle outputs.
    * This should be the same as `outputLocs.contains(Nil)`.
    */
+    // 这个Stage是否可用
   def isAvailable: Boolean = _numAvailableOutputs == numPartitions
 
   /** Returns the sequence of partition ids that are missing (i.e. needs to be computed). */
+    // 计算不可用的分区
   override def findMissingPartitions(): Seq[Int] = {
     val missing = (0 until numPartitions).filter(id => outputLocs(id).isEmpty)
     assert(missing.size == numPartitions - _numAvailableOutputs,
@@ -106,6 +110,7 @@ private[spark] class ShuffleMapStage(
     missing
   }
 
+  // 某个partition完成，记录运行结果
   def addOutputLoc(partition: Int, status: MapStatus): Unit = {
     val prevList = outputLocs(partition)
     outputLocs(partition) = status :: prevList

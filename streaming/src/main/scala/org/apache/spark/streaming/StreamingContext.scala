@@ -61,6 +61,31 @@ import org.apache.spark.util.{CallSite, ShutdownHookManager, ThreadUtils, Utils}
  * `context.awaitTermination()` allows the current thread to wait for the termination
  * of the context by `stop()` or by an exception.
  */
+
+/*
+ * Spark Streaming 功能的主要入口点。
+ * 它提供了用于从各种输入源创建DStream的方法。
+ * 它可以通过提供 Spark master URL 和 appName 来创建，
+ * 也可以从 org.apache.spark.SparkConf 配置（请参阅核心 Spark 文档）或现有的 org.apache.spark.SparkContext 创建。
+ * 可以使用context.sparkContext访问关联的 SparkContext。
+ * 创建和转换 DStreams 后，可以分别使用context.start()和context.stop()启动和停止流计算。
+ * context.awaitTermination()允许当前线程通过stop()或异常等待上下文终止。
+ *
+ *
+ * 1.StreamContext 创建并完成初始化
+ * 2.创建了 DStreamGraph，JobScheduler 等关键组件
+ * 3.调用 StreamContext 的 socketTextStream 等方法，来创建输入DStream
+ * 4.针对输入DStream执行一系列的操作
+ * 5.最后会执行一个output输出操作，来触发针对一个一个的batch的job的触发和执行
+ *
+ * 上述初始化操作完成之后
+ * 有一个方法是必须要调用的，不调用的话，相当于整个spark streaming应用程序都不会执行
+ * StreamingContext.start（），启动一个Spark Streaming程序
+ * 这个start（）方法很重要，就是创建StreamingContext相关的另外两个重要组件：ReceiverTracker JobGenerator
+ * 另外，会启动整个Spark Streaming应用程序的输入DStream，对应的Receiver
+ * 在Worker节点中的某个Executor中启动的
+ */
+
 class StreamingContext private[streaming] (
     _sc: SparkContext,
     _cp: Checkpoint,
@@ -153,6 +178,8 @@ class StreamingContext private[streaming] (
 
   private[streaming] val env = sc.env
 
+  // 很重要的组件，DStreamGraph
+  // 里边保存了我们定义的SparkStreaming Application中，一系列的DStream的依赖关系以及相互之间的算子的应用
   private[streaming] val graph: DStreamGraph = {
     if (isCheckpointPresent) {
       _cp.graph.setContext(this)
@@ -181,6 +208,9 @@ class StreamingContext private[streaming] (
     if (isCheckpointPresent) _cp.checkpointDuration else graph.batchDuration
   }
 
+  // JobScheduler涉及到Job的调度
+  // JobGenerator会负责每隔batch interval，生成一个job，然后通过JobScheduler来调度和提交Job
+  // 底层还是基于Spark 核心计算引擎
   private[streaming] val scheduler = new JobScheduler(this)
 
   private[streaming] val waiter = new ContextWaiter
@@ -563,6 +593,7 @@ class StreamingContext private[streaming] (
    *
    * @throws IllegalStateException if the StreamingContext is already stopped.
    */
+
   def start(): Unit = synchronized {
     state match {
       case INITIALIZED =>
@@ -575,11 +606,13 @@ class StreamingContext private[streaming] (
             // Start the streaming scheduler in a new thread, so that thread local properties
             // like call sites and job groups can be reset without affecting those of the
             // current thread.
+            // 在新线程中启动流调度程序，以便可以在不影响当前线程的情况下重置线程本地属性，例如调用站点和作业组
             ThreadUtils.runInNewThread("streaming-start") {
               sparkContext.setCallSite(startSite.get)
               sparkContext.clearJobGroup()
               sparkContext.setLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL, "false")
               savedProperties.set(SerializationUtils.clone(sparkContext.localProperties.get()))
+              // 调用了 JobScheduler的 start()
               scheduler.start()
             }
             state = StreamingContextState.ACTIVE

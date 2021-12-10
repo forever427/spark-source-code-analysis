@@ -53,6 +53,9 @@ private[streaming] class ReceiverSupervisorImpl(
   private val executorId = SparkEnv.get.blockManager.blockManagerId.executorId
 
   private val receivedBlockHandler: ReceivedBlockHandler = {
+    // 判断是否开启了预写日至功能 spark.streaming.receiver.writeAheadLog.enable
+    // 如果开启了，那么 receivedBlockHandler 就是 WriteAheadLogBasedBlockHandler
+    // 如果没有开启，那么 receivedBlockHandler 就是 BlockManagerBasedBlockHandler
     if (WriteAheadLogUtils.enableReceiverLog(env.conf)) {
       if (checkpointDirOption.isEmpty) {
         throw new SparkException(
@@ -94,6 +97,7 @@ private[streaming] class ReceiverSupervisorImpl(
   /** Unique block ids if one wants to add blocks directly */
   private val newBlockId = new AtomicLong(System.currentTimeMillis())
 
+  // 注册block块生成器
   private val registeredBlockGenerators = new ConcurrentLinkedQueue[BlockGenerator]()
 
   /** Divides received data records into data blocks for pushing in BlockManager. */
@@ -107,6 +111,7 @@ private[streaming] class ReceiverSupervisorImpl(
     }
 
     def onPushBlock(blockId: StreamBlockId, arrayBuffer: ArrayBuffer[_]) {
+      // 去推送 block
       pushArrayBuffer(arrayBuffer, None, Some(blockId))
     }
   }
@@ -155,10 +160,14 @@ private[streaming] class ReceiverSupervisorImpl(
     ) {
     val blockId = blockIdOption.getOrElse(nextBlockId)
     val time = System.currentTimeMillis
+    // 使用receivedBlockHandler，调用storeBlock（）方法，存储block到BlockManager
+    // 这个方法可以看出预写日志功能
     val blockStoreResult = receivedBlockHandler.storeBlock(blockId, receivedBlock)
     logDebug(s"Pushed block $blockId in ${(System.currentTimeMillis - time)} ms")
     val numRecords = blockStoreResult.numRecords
+    // 封装为一个 ReceivedBlockInfo 对象，里边有一个 streamId
     val blockInfo = ReceivedBlockInfo(streamId, numRecords, metadataOption, blockStoreResult)
+    // 调用askSync（） 发送AddBlock(blockInfo)
     trackerEndpoint.askSync[Boolean](AddBlock(blockInfo))
     logDebug(s"Reported block $blockId")
   }

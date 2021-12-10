@@ -39,6 +39,10 @@ class SocketInputDStream[T: ClassTag](
     storageLevel: StorageLevel
   ) extends ReceiverInputDStream[T](_ssc) {
 
+  /**
+   * 输入DStream，一定都会有一个重要的方法，getReceiver（）
+   * 这个方法，就负责返回DStream的Receiver
+   **/
   def getReceiver(): Receiver[T] = {
     new SocketReceiver(host, port, bytesToObjects, storageLevel)
   }
@@ -67,6 +71,7 @@ class SocketReceiver[T: ClassTag](
     logInfo(s"Connected to $host:$port")
 
     // Start the thread that receives data over a connection
+    // 启动通过连接接收数据的线程
     new Thread("Socket Receiver") {
       setDaemon(true)
       override def run() { receive() }
@@ -85,6 +90,7 @@ class SocketReceiver[T: ClassTag](
   }
 
   /** Create a socket connection and receive data until receiver is stopped */
+  // 创建套接字连接并接收数据直到接收器停止
   def receive() {
     try {
       val iterator = bytesToObjects(socket.getInputStream())

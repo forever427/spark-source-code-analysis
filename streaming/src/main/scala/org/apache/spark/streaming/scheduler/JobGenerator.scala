@@ -189,6 +189,7 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
   }
 
   /** Starts the generator for the first time */
+  // 初始化一个开始时间，根据自己设置的batch interval，每到一个batch interval都会从上一个time，也就是这里的startTime，开始batch interval内的数据封装为一个batch
   private def startFirstTime() {
     val startTime = new Time(timer.getStartTime())
     graph.start(startTime - graph.batchDuration)
@@ -240,16 +241,22 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
   }
 
   /** Generate jobs and perform checkpointing for the given `time`.  */
+  // 生成 job 并在给定时间内执行检查点。
   private def generateJobs(time: Time) {
     // Checkpoint all RDDs marked for checkpointing to ensure their lineages are
     // truncated periodically. Otherwise, we may run into stack overflows (SPARK-6847).
     ssc.sparkContext.setLocalProperty(RDD.CHECKPOINT_ALL_MARKED_ANCESTORS, "true")
     Try {
+      // 调用 ReceiverTracker 中的 allocateBlocksToBatch() 方法，将当前时间段内的block分配给一个batch
+      // 并为其创建一个 RDD
       jobScheduler.receiverTracker.allocateBlocksToBatch(time) // allocate received blocks to batch
+      // 然后调用DStreamGraph 的 generateJobs（）方法，来根据我们定义的DStream之间的依赖关系和算子，生成对应的job
       graph.generateJobs(time) // generate jobs using allocated block
     } match {
+      // 如果成功的创建了Job，获取当前batch interval 对应的数据信息
       case Success(jobs) =>
         val streamIdToInputInfos = jobScheduler.inputInfoTracker.getInfo(time)
+        // 提交job，其对应的原始数据是那一批 block
         jobScheduler.submitJobSet(JobSet(time, jobs, streamIdToInputInfos))
       case Failure(e) =>
         jobScheduler.reportError("Error generating jobs for time " + time, e)

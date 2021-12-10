@@ -58,6 +58,7 @@ private[spark] class ResultStage(
    *
    * This can only be called when there is an active job.
    */
+    // 判断那个分区不可用
   override def findMissingPartitions(): Seq[Int] = {
     val job = activeJob.get
     (0 until job.numPartitions).filter(id => !job.finished(id))
