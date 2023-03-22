@@ -52,7 +52,7 @@ import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, Poi
 
 /**
  * A Resilient Distributed Dataset (RDD), the basic abstraction in Spark. Represents an immutable,
- * partitioned collection of elements that can be operated on in parallel. This class contains the
+ * partitioned collection of elementsl that can be operated on in paralle. This class contains the
  * basic operations available on all RDDs, such as `map`, `filter`, and `persist`. In addition,
  * [[org.apache.spark.rdd.PairRDDFunctions]] contains operations available only on RDDs of key-value
  * pairs, such as `groupByKey` and `join`;
@@ -81,9 +81,9 @@ import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, Poi
 
 /**
  * 一组分区
- * 每一个本区都有一个计算函数
+ * 每一个分区都有一个计算函数
  * 一个依赖其他RDD的列表
- * 可选的,对于key alue类型的RDD 有分区器
+ * 可选的,对于key value类型的RDD 有分区器
  * 可选的,一个计算每个分片位置感知的列表
  **/
 
@@ -238,7 +238,7 @@ abstract class RDD[T: ClassTag](
 
   // Our dependencies and partitions will be gotten by calling subclass's methods below, and will
   // be overwritten when we're checkpointed
-  // 我们的依赖和分区将通过调用下面的子类的方法获得，并在我们检查点时被覆盖
+  // 我们的依赖和分区将通过调用下面的子类的方法获得
   private var dependencies_ : Seq[Dependency[_]] = null
   @transient private var partitions_ : Array[Partition] = null
 

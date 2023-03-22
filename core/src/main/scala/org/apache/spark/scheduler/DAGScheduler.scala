@@ -484,13 +484,16 @@ class DAGScheduler(
         visited += rdd
         val rddHasUncachedPartitions = getCacheLocs(rdd).contains(Nil)
         if (rddHasUncachedPartitions) {
+          // 遍历RDD依赖
           for (dep <- rdd.dependencies) {
             dep match {
+              // 如果是宽依赖
               case shufDep: ShuffleDependency[_, _, _] =>
                 val mapStage = getOrCreateShuffleMapStage(shufDep, stage.firstJobId)
                 if (!mapStage.isAvailable) {
                   missing += mapStage
                 }
+                // 如果是窄依赖
               case narrowDep: NarrowDependency[_] =>
                 waitingForVisit.push(narrowDep.rdd)
             }
